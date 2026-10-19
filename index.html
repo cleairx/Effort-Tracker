@@ -676,9 +676,11 @@ $('closeSettings').onclick = () => $('settings').close();
 $('settings').addEventListener('click', e => { if(e.target === $('settings')) $('settings').close(); });
 
 $('saveConn').onclick = async () => {
-  const url = $('urlInput').value.trim(), key = $('keyInput').value;
+  let url = $('urlInput').value.trim(); const key = $('keyInput').value;
+  if(/^AKfy[\w-]{20,}$/.test(url)) url = `https://script.google.com/macros/s/${url}/exec`;   // accept a bare Deployment ID
+  $('urlInput').value = url;
   const hint = $('connHint');
-  if(!/^https:\/\/script\.google(usercontent)?\.com\/.+/.test(url)){ hint.className = 'hint err'; hint.textContent = 'That doesn\'t look like an Apps Script web app URL.'; return; }
+  if(!/^https:\/\/script\.google(usercontent)?\.com\/.+/.test(url)){ hint.className = 'hint err'; hint.textContent = 'Paste the Web app URL (starts with https://script.google.com and ends in /exec).'; return; }
   if(!key){ hint.className = 'hint err'; hint.textContent = 'Enter your passcode.'; return; }
   hint.className = 'hint'; hint.textContent = 'Checking connection';
   const prev = cfg; cfg = { mode: 'sheet', url, key };
