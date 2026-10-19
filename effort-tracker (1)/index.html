@@ -1,0 +1,717 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Effort Tracker</title>
+<meta name="description" content="Log daily hours and watch the effort add up.">
+<meta name="theme-color" content="#f6f6f4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#121214" media="(prefers-color-scheme: dark)">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Effort">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" type="image/png" href="icon-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.2/src/regular/style.css">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.6/dist/chart.umd.js"></script>
+<style>
+/* Shape system: panels 16px, inputs/buttons 12px, chips full pill. */
+:root{
+  --bg:#f6f6f4; --panel:#ffffff; --panel-2:#efefec; --line:#e3e3df;
+  --fg:#18181b; --muted:#62626a; --faint:#8b8b93;
+  --ink:#18181b; --on-ink:#fafaf9;
+  --danger:#c2410c; --ok:#15803d;
+  --shadow:0 1px 2px rgba(24,24,27,.04),0 8px 24px rgba(24,24,27,.05);
+  --r-panel:16px; --r-ctl:12px;
+  color-scheme:light;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --bg:#121214; --panel:#1b1b1e; --panel-2:#26262a; --line:#2e2e33;
+    --fg:#f2f2f0; --muted:#a3a3ab; --faint:#75757e;
+    --ink:#f2f2f0; --on-ink:#18181b;
+    --danger:#fb923c; --ok:#4ade80;
+    --shadow:0 1px 2px rgba(0,0,0,.3),0 8px 24px rgba(0,0,0,.25);
+    color-scheme:dark;
+  }
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{
+  background:var(--bg); color:var(--fg);
+  font-family:"Geist",system-ui,-apple-system,"Segoe UI",sans-serif;
+  font-size:15px; line-height:1.45; -webkit-font-smoothing:antialiased;
+  padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom);
+}
+button,input{font:inherit;color:inherit}
+button{cursor:pointer;-webkit-tap-highlight-color:transparent}
+.num{font-family:"Geist Mono",ui-monospace,monospace;font-variant-numeric:tabular-nums}
+
+/* Layout */
+.wrap{max-width:1180px;margin:0 auto;padding:12px 16px 40px}
+header.top{display:flex;align-items:center;justify-content:space-between;height:60px}
+header.top h1{font-size:20px;font-weight:600;letter-spacing:-.02em;margin:0}
+.grid{display:grid;gap:16px}
+@media (min-width:900px){
+  .grid{grid-template-columns:380px 1fr;align-items:start}
+  .col-left{position:sticky;top:16px}
+}
+.col{display:grid;gap:16px;min-width:0}
+@media (max-width:899px){.col{display:contents}#recentPanel{order:5}}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:var(--r-panel);box-shadow:var(--shadow);padding:18px}
+.panel h2{font-size:15px;font-weight:600;margin:0 0 14px;letter-spacing:-.01em}
+.label{font-size:13px;color:var(--muted);margin:0 0 8px;display:block}
+
+/* Buttons */
+.icon-btn{width:44px;height:44px;border-radius:var(--r-ctl);border:1px solid var(--line);background:var(--panel);display:grid;place-items:center;font-size:20px;transition:transform .15s ease,background .15s ease}
+.icon-btn:active{transform:scale(.96)}
+.icon-btn:hover{background:var(--panel-2)}
+.btn{height:48px;border-radius:var(--r-ctl);border:1px solid var(--line);background:var(--panel);padding:0 18px;font-weight:600;display:inline-flex;align-items:center;justify-content:center;gap:8px;transition:transform .15s ease,opacity .15s ease,background .15s ease;white-space:nowrap}
+.btn:active{transform:translateY(1px) scale(.99)}
+.btn.primary{background:var(--ink);color:var(--on-ink);border-color:var(--ink)}
+.btn.primary:disabled{opacity:.45;cursor:default}
+.btn.ghost{background:transparent}
+.btn.danger{color:var(--danger)}
+.btn.block{width:100%}
+:focus-visible{outline:2px solid var(--fg);outline-offset:2px}
+
+/* Chips */
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{min-height:40px;padding:0 14px;border-radius:999px;border:1px solid var(--line);background:var(--panel);font-weight:500;font-size:14px;display:inline-flex;align-items:center;gap:8px;transition:background .15s ease,border-color .15s ease}
+.chip[aria-pressed="true"]{background:var(--ink);color:var(--on-ink);border-color:var(--ink)}
+.chip .sw{width:10px;height:10px;border-radius:3px;flex:none}
+.chip.small{min-height:34px;padding:0 12px;font-size:13px}
+
+/* Log form */
+.date-row{display:grid;grid-template-columns:44px 1fr 44px;gap:8px;align-items:center}
+.date-pick{position:relative;height:44px;border:1px solid var(--line);border-radius:var(--r-ctl);display:flex;align-items:center;justify-content:center;gap:8px;font-weight:600;background:var(--panel)}
+.date-pick small{color:var(--muted);font-weight:500}
+.date-pick input{position:absolute;inset:0;opacity:0;width:100%;height:100%;cursor:pointer}
+.stack{display:grid;gap:18px}
+.hours{display:grid;grid-template-columns:56px 1fr 56px;align-items:center;gap:8px}
+.hours .val{text-align:center}
+.hours .val b{font-size:44px;font-weight:600;letter-spacing:-.03em;line-height:1}
+.hours .val span{display:block;color:var(--muted);font-size:13px;margin-top:4px}
+.hours .icon-btn{width:56px;height:56px;border-radius:999px;font-size:22px}
+.presets{display:grid;grid-template-columns:repeat(5,1fr);gap:8px}
+.presets .chip{justify-content:center;padding:0}
+.field{width:100%;height:46px;border-radius:var(--r-ctl);border:1px solid var(--line);background:var(--panel);padding:0 14px}
+.field::placeholder{color:var(--faint)}
+.hint{font-size:13px;color:var(--muted);min-height:18px;margin:0}
+.hint.err{color:var(--danger)}
+
+/* Stats */
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px}
+.stat{padding:16px 18px;border-radius:var(--r-panel);background:var(--panel);border:1px solid var(--line);box-shadow:var(--shadow);position:relative;overflow:hidden}
+.stat::before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--c)}
+.stat .name{font-size:14px;font-weight:600;margin:0 0 10px}
+.stat .big{display:flex;align-items:baseline;gap:8px}
+.stat .big b{font-size:34px;font-weight:600;letter-spacing:-.03em;line-height:1}
+.stat .big span{color:var(--muted);font-size:14px}
+.stat .row{display:flex;gap:18px;margin-top:12px;font-size:13px;color:var(--muted)}
+.stat .row b{color:var(--fg);font-weight:600}
+
+/* Chart */
+.tabs{display:grid;grid-template-columns:1fr 1fr;background:var(--panel-2);border-radius:var(--r-ctl);padding:4px;gap:4px;margin-bottom:14px}
+.tab{height:40px;border:0;border-radius:9px;background:transparent;font-weight:600;color:var(--muted);transition:background .15s ease,color .15s ease}
+.tab[aria-selected="true"]{background:var(--panel);color:var(--fg);box-shadow:0 1px 2px rgba(0,0,0,.08)}
+.chart-tools{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:12px}
+.chart-box{position:relative;height:300px}
+@media (min-width:900px){.chart-box{height:360px}}
+.chart-caption{font-size:13px;color:var(--muted);margin:12px 0 0}
+.empty{display:grid;place-items:center;text-align:center;height:100%;color:var(--muted);padding:20px}
+
+/* Recent */
+.recent{display:grid;gap:4px}
+.rec{display:grid;grid-template-columns:4px 1fr auto;gap:12px;align-items:center;padding:10px 8px;border-radius:10px;border:0;background:transparent;text-align:left;width:100%}
+.rec:hover{background:var(--panel-2)}
+.rec .bar{width:4px;height:32px;border-radius:2px;background:var(--c)}
+.rec .t{font-weight:500;font-size:14px}
+.rec .s{font-size:12.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:220px}
+.rec .h{font-weight:600}
+
+/* Welcome */
+.welcome{max-width:520px;margin:8vh auto 0;display:grid;gap:22px}
+.welcome h2{font-size:30px;line-height:1.1;letter-spacing:-.03em;margin:0}
+.welcome p{color:var(--muted);margin:0;max-width:46ch}
+.welcome .acts{display:flex;gap:10px;flex-wrap:wrap}
+
+/* Settings dialog */
+dialog{border:0;padding:0;background:transparent;max-width:min(520px,calc(100vw - 24px));width:100%;color:var(--fg)}
+dialog::backdrop{background:rgba(10,10,12,.45)}
+.sheet{background:var(--panel);border:1px solid var(--line);border-radius:20px;padding:20px;display:grid;gap:18px;max-height:calc(100dvh - 40px);overflow:auto}
+.sheet-head{display:flex;justify-content:space-between;align-items:center}
+.sheet-head h3{margin:0;font-size:18px}
+.sec{display:grid;gap:10px;padding-top:16px;border-top:1px solid var(--line)}
+.sec h4{margin:0;font-size:14px}
+.trow{display:flex;align-items:center;gap:10px;padding:6px 0}
+.trow .sw{width:14px;height:14px;border-radius:4px}
+.trow .n{flex:1}
+.add-topic{display:grid;grid-template-columns:1fr 48px auto;gap:8px}
+input[type=color]{width:48px;height:46px;border:1px solid var(--line);border-radius:var(--r-ctl);background:var(--panel);padding:4px}
+.inline{display:flex;gap:10px;align-items:center}
+.inline .field{width:90px}
+
+/* Toast + skeleton */
+.toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom));transform:translate(-50%,20px);opacity:0;background:var(--ink);color:var(--on-ink);padding:12px 16px;border-radius:12px;font-weight:500;font-size:14px;transition:opacity .2s ease,transform .25s cubic-bezier(.16,1,.3,1);pointer-events:none;z-index:20;max-width:calc(100vw - 32px)}
+.toast.show{opacity:1;transform:translate(-50%,0)}
+.skel{background:linear-gradient(90deg,var(--panel-2),var(--line),var(--panel-2));background-size:200% 100%;animation:sh 1.2s linear infinite;border-radius:10px}
+@keyframes sh{to{background-position:-200% 0}}
+.demo-note{font-size:13px;color:var(--muted);background:var(--panel-2);border-radius:var(--r-ctl);padding:10px 14px;display:flex;justify-content:space-between;align-items:center;gap:10px}
+.demo-note button{border:0;background:none;font-weight:600;text-decoration:underline;padding:0}
+.fade-in{animation:fi .35s cubic-bezier(.16,1,.3,1) both}
+@keyframes fi{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion: reduce){
+  *,*::before,*::after{animation:none!important;transition:none!important}
+}
+[hidden]{display:none!important}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <h1>Effort</h1>
+    <div class="inline">
+      <button class="icon-btn" id="refreshBtn" aria-label="Refresh" hidden><i class="ph ph-arrow-clockwise"></i></button>
+      <button class="icon-btn" id="settingsBtn" aria-label="Settings"><i class="ph ph-gear-six"></i></button>
+    </div>
+  </header>
+
+  <!-- First run -->
+  <section class="welcome fade-in" id="welcome" hidden>
+    <h2>See your effort add up, one day at a time.</h2>
+    <p>Log how long you worked on each topic. Any day with at least an hour counts as showing up.</p>
+    <div class="acts">
+      <button class="btn primary" id="connectBtn">Connect my Sheet</button>
+      <button class="btn" id="demoBtn">Try with sample data</button>
+    </div>
+  </section>
+
+  <!-- App -->
+  <main id="app" hidden>
+    <div class="demo-note" id="demoNote" hidden>
+      <span>Sample data. Nothing here is saved to your Sheet.</span>
+      <button id="demoConnect">Connect Sheet</button>
+    </div>
+    <div class="grid" style="margin-top:12px">
+      <div class="col col-left">
+        <section class="panel" aria-labelledby="logTitle">
+          <h2 id="logTitle">Log hours</h2>
+          <div class="stack">
+            <div class="date-row">
+              <button class="icon-btn" id="prevDay" aria-label="Previous day"><i class="ph ph-caret-left"></i></button>
+              <label class="date-pick">
+                <span id="dateMain">Today</span><small id="dateSub"></small>
+                <input type="date" id="dateInput" aria-label="Pick a date">
+              </label>
+              <button class="icon-btn" id="nextDay" aria-label="Next day"><i class="ph ph-caret-right"></i></button>
+            </div>
+
+            <div>
+              <span class="label">Topic</span>
+              <div class="chips" id="topicChips" role="group" aria-label="Topic"></div>
+            </div>
+
+            <div>
+              <div class="hours">
+                <button class="icon-btn" id="minus" aria-label="Half an hour less"><i class="ph ph-minus"></i></button>
+                <div class="val"><b class="num" id="hoursVal">1</b><span>hours</span></div>
+                <button class="icon-btn" id="plus" aria-label="Half an hour more"><i class="ph ph-plus"></i></button>
+              </div>
+              <div class="presets" id="presets" style="margin-top:14px"></div>
+            </div>
+
+            <div>
+              <label class="label" for="note">Note (optional)</label>
+              <input class="field" id="note" maxlength="200" placeholder="e.g. Cyfrin lesson 4, FIN tutorial">
+            </div>
+
+            <div>
+              <button class="btn primary block" id="saveBtn">Save</button>
+              <p class="hint" id="saveHint" style="margin-top:8px"></p>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel" id="recentPanel" aria-labelledby="recentTitle">
+          <h2 id="recentTitle">Recent</h2>
+          <div class="recent" id="recent"></div>
+        </section>
+      </div>
+
+      <div class="col">
+        <div class="stats" id="stats"></div>
+
+        <section class="panel" aria-label="Charts">
+          <div class="tabs" role="tablist">
+            <button class="tab" role="tab" id="tabShowed" aria-selected="true">Days showed up</button>
+            <button class="tab" role="tab" id="tabHours" aria-selected="false">Hours</button>
+          </div>
+          <div class="chart-tools">
+            <div class="chips" id="filterChips" role="group" aria-label="Topic filter"></div>
+            <div class="chips" id="rangeChips" role="group" aria-label="Date range"></div>
+          </div>
+          <div class="chart-box" id="chartBox"><canvas id="chart" aria-label="Effort chart" role="img"></canvas></div>
+          <p class="chart-caption" id="chartCaption"></p>
+        </section>
+      </div>
+    </div>
+  </main>
+</div>
+
+<dialog id="settings">
+  <div class="sheet">
+    <div class="sheet-head">
+      <h3>Settings</h3>
+      <button class="icon-btn" id="closeSettings" aria-label="Close"><i class="ph ph-x"></i></button>
+    </div>
+
+    <div class="stack" style="gap:12px">
+      <div>
+        <label class="label" for="urlInput">Google Sheet web app URL</label>
+        <input class="field" id="urlInput" placeholder="https://script.google.com/macros/s/.../exec" autocomplete="off" spellcheck="false">
+      </div>
+      <div>
+        <label class="label" for="keyInput">Passcode</label>
+        <input class="field" id="keyInput" type="password" placeholder="The PASSCODE you set in the script" autocomplete="off">
+      </div>
+      <button class="btn primary block" id="saveConn">Connect</button>
+      <p class="hint" id="connHint"></p>
+    </div>
+
+    <div class="sec">
+      <h4>Showing up</h4>
+      <div class="inline">
+        <span>A day counts from</span>
+        <input class="field num" id="minHours" type="number" min="0.25" max="12" step="0.25" inputmode="decimal">
+        <span>hours</span>
+      </div>
+    </div>
+
+    <div class="sec" id="topicSec">
+      <h4>Topics</h4>
+      <div id="topicList"></div>
+      <div class="add-topic">
+        <input class="field" id="newTopic" placeholder="New topic" maxlength="40">
+        <input type="color" id="newColor" value="#2f9e8f" aria-label="Topic colour">
+        <button class="btn" id="addTopic">Add</button>
+      </div>
+    </div>
+
+    <div class="sec">
+      <h4>Data</h4>
+      <div class="inline" style="flex-wrap:wrap">
+        <button class="btn" id="useDemo">Use sample data</button>
+        <button class="btn danger" id="disconnect">Disconnect</button>
+      </div>
+    </div>
+  </div>
+</dialog>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+/* ---------------- Storage ---------------- */
+const LS = {
+  get(k, d){ try{ const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; }catch{ return d; } },
+  set(k, v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch{} },
+  del(k){ try{ localStorage.removeItem(k); }catch{} }
+};
+let cfg = LS.get('et.cfg', null);          // {mode:'sheet'|'demo', url, key}
+let prefs = LS.get('et.prefs', {minHours:1, view:'showed', range:'all', filter:'all'});
+let data = null;                           // {entries:[{date,topic,hours,note}], topics:[{name,color}]}
+
+/* ---------------- Dates ---------------- */
+const pad = n => String(n).padStart(2,'0');
+const iso = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+const parse = s => { const [y,m,d] = s.split('-').map(Number); return new Date(y, m-1, d); };
+const addDays = (s, n) => { const d = parse(s); d.setDate(d.getDate()+n); return iso(d); };
+const today = () => iso(new Date());
+const fmtShort = s => parse(s).toLocaleDateString('en-SG', {day:'numeric', month:'short'});
+const fmtLong = s => parse(s).toLocaleDateString('en-SG', {weekday:'short', day:'numeric', month:'short'});
+function dateRange(a, b){ const out = []; for(let s = a; s <= b; s = addDays(s,1)) out.push(s); return out; }
+const fmtH = h => (Math.round(h*100)/100).toString();
+
+/* ---------------- Backend ---------------- */
+async function readJson(res){
+  if(!res.ok) throw new Error(`Network error (${res.status})`);
+  let j;
+  try{ j = await res.json(); }
+  catch{ throw new Error('Unexpected reply. Check the web app is deployed with access set to "Anyone".'); }
+  if(!j.ok) throw new Error(j.error || 'Something went wrong');
+  return { entries: j.entries || [], topics: j.topics || [] };
+}
+const backend = {
+  async load(){
+    if(cfg.mode === 'demo') return demo.load();
+    const res = await fetch(`${cfg.url}?key=${encodeURIComponent(cfg.key)}&t=${Date.now()}`);
+    return readJson(res);
+  },
+  async send(action, payload){
+    if(cfg.mode === 'demo') return demo.send(action, payload);
+    // No custom headers: keeps it a "simple" request so Apps Script accepts it from any site.
+    const res = await fetch(cfg.url, { method:'POST', body: JSON.stringify({ key: cfg.key, action, ...payload }) });
+    return readJson(res);
+  }
+};
+
+/* Shared write logic (used for demo mode and optimistic updates) */
+function applyLocal(d, action, p){
+  d = { entries: d.entries.map(e => ({...e})), topics: d.topics.map(t => ({...t})) };
+  if(action === 'upsert'){
+    const i = d.entries.findIndex(e => e.date === p.date && e.topic === p.topic);
+    if(p.hours <= 0){ if(i >= 0) d.entries.splice(i,1); }
+    else if(i >= 0) d.entries[i] = { date:p.date, topic:p.topic, hours:p.hours, note:p.note||'' };
+    else d.entries.push({ date:p.date, topic:p.topic, hours:p.hours, note:p.note||'' });
+  } else if(action === 'addTopic'){
+    if(d.topics.some(t => t.name.toLowerCase() === p.name.toLowerCase())) throw new Error('That topic already exists');
+    d.topics.push({ name:p.name, color:p.color });
+  } else if(action === 'removeTopic'){
+    d.topics = d.topics.filter(t => t.name.toLowerCase() !== p.name.toLowerCase());
+  }
+  return d;
+}
+
+/* ---------------- Demo data ---------------- */
+const demo = {
+  seed(){
+    let x = 7; const rnd = () => (x = (x * 16807) % 2147483647) / 2147483647;
+    const topics = [{name:'School', color:'#4f6bed'}, {name:'DeFi / Blockchain', color:'#e8833a'}];
+    const entries = []; const t = today();
+    for(let i = 62; i >= 0; i--){
+      const d = addDays(t, -i); const dow = parse(d).getDay();
+      if(rnd() < (dow === 0 || dow === 6 ? .45 : .82)) entries.push({date:d, topic:'School', hours: Math.round((1 + rnd()*3.5)*2)/2, note:''});
+      if(rnd() < .6) entries.push({date:d, topic:'DeFi / Blockchain', hours: Math.round((.5 + rnd()*2.5)*2)/2, note: rnd() < .3 ? 'Cyfrin Updraft' : ''});
+    }
+    return { entries, topics };
+  },
+  load(){ let d = LS.get('et.demo', null); if(!d){ d = this.seed(); LS.set('et.demo', d); } return Promise.resolve(d); },
+  send(action, p){ return this.load().then(d => { const n = applyLocal(d, action, p); LS.set('et.demo', n); return n; }); }
+};
+
+/* ---------------- UI state ---------------- */
+const ui = { date: today(), topic: null, hours: 1, note: '' };
+const $ = id => document.getElementById(id);
+let chart = null;
+
+function toast(msg){
+  const t = $('toast'); t.textContent = msg; t.classList.add('show');
+  clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove('show'), 2200);
+}
+function savePrefs(){ LS.set('et.prefs', prefs); }
+function topicColor(name){ return (data.topics.find(t => t.name === name) || {}).color || '#8b8b93'; }
+function entryFor(date, topic){ return data.entries.find(e => e.date === date && e.topic === topic); }
+
+/* ---------------- Calculations ---------------- */
+function compute(){
+  const t = today();
+  const topics = data.topics.map(x => x.name);
+  const valid = data.entries.filter(e => topics.includes(e.topic) && e.date <= t);
+  const first = valid.reduce((m, e) => e.date < m ? e.date : m, t);
+  const all = dateRange(first, t);
+  const byTopic = {};
+  for(const name of topics){
+    const daily = Object.fromEntries(all.map(d => [d, 0]));
+    valid.filter(e => e.topic === name).forEach(e => daily[e.date] += e.hours);
+    let c = 0, ch = 0;
+    const showed = [], cumH = [], hrs = [];
+    for(const d of all){
+      if(daily[d] >= prefs.minHours) c++;
+      ch += daily[d];
+      showed.push(c); cumH.push(Math.round(ch*100)/100); hrs.push(daily[d]);
+    }
+    // streak: consecutive qualifying days ending today (or yesterday if today isn't logged yet)
+    let streak = 0, i = all.length - 1;
+    if(i >= 0 && daily[all[i]] < prefs.minHours) i--;
+    for(; i >= 0 && daily[all[i]] >= prefs.minHours; i--) streak++;
+    const week = all.slice(-7).reduce((s, d) => s + daily[d], 0);
+    byTopic[name] = { daily: hrs, showed, cumH, streak, days: c, total: ch, week };
+  }
+  return { dates: all, byTopic };
+}
+
+/* ---------------- Render: log form ---------------- */
+function renderLog(){
+  const t = today();
+  $('dateInput').max = t; $('dateInput').value = ui.date;
+  $('dateMain').textContent = ui.date === t ? 'Today' : ui.date === addDays(t,-1) ? 'Yesterday' : fmtLong(ui.date);
+  $('dateSub').textContent = (ui.date === t || ui.date === addDays(t,-1)) ? fmtShort(ui.date) : '';
+  $('nextDay').disabled = ui.date >= t; $('nextDay').style.opacity = ui.date >= t ? .35 : 1;
+
+  $('topicChips').innerHTML = data.topics.map(tp =>
+    `<button class="chip" aria-pressed="${tp.name === ui.topic}" data-topic="${esc(tp.name)}"><span class="sw" style="background:${tp.color}"></span>${esc(tp.name)}</button>`
+  ).join('') || `<span class="hint">Add a topic in Settings.</span>`;
+
+  $('hoursVal').textContent = fmtH(ui.hours);
+  $('presets').innerHTML = [0.5,1,2,3,4].map(h =>
+    `<button class="chip small num" aria-pressed="${ui.hours === h}" data-h="${h}">${h}h</button>`).join('');
+  $('note').value = ui.note;
+
+  const ex = ui.topic && entryFor(ui.date, ui.topic);
+  const btn = $('saveBtn');
+  btn.disabled = !ui.topic || (!ex && ui.hours === 0);
+  btn.textContent = ex ? (ui.hours === 0 ? 'Remove entry' : 'Update') : 'Save';
+  $('saveHint').className = 'hint';
+  $('saveHint').textContent = ex ? `Already logged ${fmtH(ex.hours)}h for this day. Saving replaces it.` : '';
+}
+function loadExisting(){
+  const ex = ui.topic && entryFor(ui.date, ui.topic);
+  ui.hours = ex ? ex.hours : 1; ui.note = ex ? ex.note : '';
+}
+
+/* ---------------- Render: stats ---------------- */
+function renderStats(c){
+  $('stats').innerHTML = data.topics.map(tp => {
+    const s = c.byTopic[tp.name];
+    return `<div class="stat fade-in" style="--c:${tp.color}">
+      <p class="name">${esc(tp.name)}</p>
+      <div class="big"><b class="num">${s.days}</b><span>${s.days === 1 ? 'day' : 'days'} showed up</span></div>
+      <div class="row"><span>Streak <b class="num">${s.streak}</b></span><span>This week <b class="num">${fmtH(s.week)}h</b></span><span>Total <b class="num">${fmtH(s.total)}h</b></span></div>
+    </div>`;
+  }).join('');
+}
+
+/* ---------------- Render: chart ---------------- */
+function css(v){ return getComputedStyle(document.documentElement).getPropertyValue(v).trim(); }
+function renderChart(c){
+  $('tabShowed').setAttribute('aria-selected', prefs.view === 'showed');
+  $('tabHours').setAttribute('aria-selected', prefs.view === 'hours');
+
+  if(prefs.filter !== 'all' && !data.topics.some(t => t.name === prefs.filter)) prefs.filter = 'all';
+  $('filterChips').innerHTML = [{name:'all'}, ...data.topics].map(t =>
+    `<button class="chip small" aria-pressed="${prefs.filter === t.name}" data-filter="${esc(t.name)}">${t.color ? `<span class="sw" style="background:${t.color}"></span>` : ''}${t.name === 'all' ? 'All' : esc(t.name)}</button>`).join('');
+  $('rangeChips').innerHTML = [['30','30D'],['90','90D'],['all','All']].map(([k,l]) =>
+    `<button class="chip small" aria-pressed="${prefs.range === k}" data-range="${k}">${l}</button>`).join('');
+
+  const shown = data.topics.filter(t => prefs.filter === 'all' || t.name === prefs.filter);
+  let start = 0;
+  if(prefs.range !== 'all') start = Math.max(0, c.dates.length - Number(prefs.range));
+  const labels = c.dates.slice(start).map(fmtShort);
+  const hasData = data.entries.some(e => shown.some(t => t.name === e.topic));
+
+  if(chart){ chart.destroy(); chart = null; }
+  const box = $('chartBox');
+  box.querySelector('.empty')?.remove();
+  if(!hasData || !shown.length){
+    $('chart').style.display = 'none';
+    box.insertAdjacentHTML('beforeend', `<div class="empty">Log your first hour and your line starts here.</div>`);
+    $('chartCaption').textContent = '';
+    return;
+  }
+  $('chart').style.display = 'block';
+
+  const grid = css('--line'), muted = css('--muted'), fg = css('--fg');
+  Chart.defaults.font.family = '"Geist", system-ui, sans-serif';
+  Chart.defaults.color = muted;
+  const common = {
+    responsive: true, maintainAspectRatio: false, animation: { duration: matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 450 },
+    interaction: { mode: 'index', intersect: false },
+    plugins: {
+      legend: { display: false },
+      tooltip: { backgroundColor: css('--ink'), titleColor: css('--on-ink'), bodyColor: css('--on-ink'), padding: 10, cornerRadius: 10, boxPadding: 4, usePointStyle: true }
+    },
+    scales: {
+      x: { grid: { display: false }, ticks: { maxRotation: 0, autoSkip: true, maxTicksLimit: 7 }, border: { color: grid } },
+      y: { beginAtZero: true, grid: { color: grid }, border: { display: false }, ticks: { precision: 0 } }
+    }
+  };
+
+  if(prefs.view === 'showed'){
+    const datasets = shown.map(t => ({
+      label: t.name, data: c.byTopic[t.name].showed.slice(start),
+      borderColor: t.color, backgroundColor: t.color + '22', fill: shown.length === 1,
+      borderWidth: 2.5, pointRadius: 0, pointHoverRadius: 4, tension: 0, stepped: 'after'
+    }));
+    chart = new Chart($('chart'), { type: 'line', data: { labels, datasets }, options: {
+      ...common,
+      plugins: { ...common.plugins, tooltip: { ...common.plugins.tooltip, callbacks: { label: ctx => ` ${ctx.dataset.label}: ${ctx.parsed.y} days` } } }
+    }});
+    $('chartCaption').textContent = `Each day with ${fmtH(prefs.minHours)}h or more adds one. Flat stretches are days off.`;
+  } else {
+    const bars = shown.map(t => ({
+      type: 'bar', label: t.name, data: c.byTopic[t.name].daily.slice(start),
+      backgroundColor: t.color, borderRadius: 3, stack: 'h', yAxisID: 'y', order: 2, maxBarThickness: 22
+    }));
+    const cum = c.dates.map((_, i) => shown.reduce((s, t) => s + c.byTopic[t.name].cumH[i], 0)).slice(start);
+    const lineColor = shown.length === 1 ? shown[0].color : fg;
+    const line = { type: 'line', label: 'Total so far', data: cum, borderColor: lineColor, borderWidth: 2, pointRadius: 0, pointHoverRadius: 4, tension: .25, yAxisID: 'y1', order: 1 };
+    chart = new Chart($('chart'), { type: 'bar', data: { labels, datasets: [...bars, line] }, options: {
+      ...common,
+      scales: {
+        x: { ...common.scales.x, stacked: true },
+        y: { ...common.scales.y, stacked: true, title: { display: true, text: 'Hours per day' }, ticks: { precision: 1 } },
+        y1: { position: 'right', beginAtZero: true, grid: { display: false }, border: { display: false }, title: { display: true, text: 'Total hours' } }
+      },
+      plugins: { ...common.plugins, tooltip: { ...common.plugins.tooltip, callbacks: { label: ctx => ` ${ctx.dataset.label}: ${fmtH(ctx.parsed.y)}h` } } }
+    }});
+    $('chartCaption').textContent = 'Bars are hours each day. The line is your running total.';
+  }
+}
+
+/* ---------------- Render: recent ---------------- */
+function renderRecent(){
+  const names = data.topics.map(t => t.name);
+  const list = data.entries.filter(e => names.includes(e.topic))
+    .sort((a,b) => b.date.localeCompare(a.date) || a.topic.localeCompare(b.topic)).slice(0, 12);
+  $('recent').innerHTML = list.length ? list.map(e => `
+    <button class="rec" data-date="${e.date}" data-topic="${esc(e.topic)}" style="--c:${topicColor(e.topic)}">
+      <span class="bar"></span>
+      <span><span class="t">${esc(e.topic)}</span><br><span class="s">${fmtLong(e.date)}${e.note ? ', ' + esc(e.note) : ''}</span></span>
+      <span class="h num">${fmtH(e.hours)}h</span>
+    </button>`).join('') : `<p class="hint">Nothing logged yet.</p>`;
+}
+
+function renderAll(){
+  if(!ui.topic || !data.topics.some(t => t.name === ui.topic)){ ui.topic = data.topics[0]?.name || null; loadExisting(); }
+  const c = compute();
+  renderLog(); renderStats(c); renderChart(c); renderRecent(); renderTopicList();
+}
+function esc(s){ return String(s).replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch])); }
+
+/* ---------------- Screens ---------------- */
+function showSkeleton(){
+  $('stats').innerHTML = `<div class="skel" style="height:118px"></div><div class="skel" style="height:118px"></div>`;
+  $('recent').innerHTML = `<div class="skel" style="height:40px"></div><div class="skel" style="height:40px;margin-top:8px"></div>`;
+}
+async function start(){
+  $('welcome').hidden = !!cfg; $('app').hidden = !cfg;
+  $('refreshBtn').hidden = !cfg || cfg.mode === 'demo';
+  $('demoNote').hidden = !cfg || cfg.mode !== 'demo';
+  if(!cfg) return;
+  ui.date = today(); ui.topic = null;   // reset form for the (possibly new) data source
+  const cacheKey = cfg.mode === 'demo' ? null : 'et.cache';
+  data = cacheKey ? LS.get(cacheKey, null) : null;
+  if(data) renderAll(); else showSkeleton();
+  try{
+    data = await backend.load();
+    if(cacheKey) LS.set(cacheKey, data);
+    renderAll();
+  }catch(err){
+    if(!data){ data = { entries: [], topics: [] }; renderAll(); }
+    toast("Couldn't reach your Sheet. " + err.message);
+  }
+}
+
+/* ---------------- Actions ---------------- */
+async function write(action, payload, okMsg){
+  const before = data;
+  try{ data = applyLocal(data, action, payload); renderAll(); }   // optimistic
+  catch(err){ toast(err.message); return false; }
+  try{
+    data = await backend.send(action, payload);
+    if(cfg.mode !== 'demo') LS.set('et.cache', data);
+    renderAll(); if(okMsg) toast(okMsg);
+    return true;
+  }catch(err){
+    data = before; renderAll();
+    $('saveHint').className = 'hint err'; $('saveHint').textContent = err.message;
+    toast('Not saved. ' + err.message);
+    return false;
+  }
+}
+
+$('saveBtn').onclick = async () => {
+  if(!ui.topic) return;
+  ui.note = $('note').value.trim();
+  const removing = ui.hours === 0;
+  const btn = $('saveBtn'); btn.disabled = true; btn.textContent = 'Saving';
+  await write('upsert', { date: ui.date, topic: ui.topic, hours: ui.hours, note: ui.note },
+    removing ? 'Entry removed' : `Saved ${fmtH(ui.hours)}h of ${ui.topic}`);
+};
+$('minus').onclick = () => { ui.hours = Math.max(0, ui.hours - 0.5); renderLog(); };
+$('plus').onclick = () => { ui.hours = Math.min(24, ui.hours + 0.5); renderLog(); };
+$('presets').onclick = e => { const b = e.target.closest('[data-h]'); if(b){ ui.hours = Number(b.dataset.h); renderLog(); } };
+$('topicChips').onclick = e => { const b = e.target.closest('[data-topic]'); if(b){ ui.note = $('note').value; ui.topic = b.dataset.topic; loadExisting(); renderLog(); } };
+$('note').oninput = e => { ui.note = e.target.value; };
+$('prevDay').onclick = () => { ui.date = addDays(ui.date, -1); loadExisting(); renderLog(); };
+$('nextDay').onclick = () => { if(ui.date < today()){ ui.date = addDays(ui.date, 1); loadExisting(); renderLog(); } };
+$('dateInput').onchange = e => { if(e.target.value && e.target.value <= today()){ ui.date = e.target.value; loadExisting(); renderLog(); } };
+$('recent').onclick = e => {
+  const b = e.target.closest('.rec'); if(!b) return;
+  ui.date = b.dataset.date; ui.topic = b.dataset.topic; loadExisting(); renderLog();
+  $('logTitle').closest('.panel').scrollIntoView({ behavior: 'smooth', block: 'start' });
+};
+$('tabShowed').onclick = () => { prefs.view = 'showed'; savePrefs(); renderChart(compute()); };
+$('tabHours').onclick = () => { prefs.view = 'hours'; savePrefs(); renderChart(compute()); };
+$('filterChips').onclick = e => { const b = e.target.closest('[data-filter]'); if(b){ prefs.filter = b.dataset.filter; savePrefs(); renderChart(compute()); } };
+$('rangeChips').onclick = e => { const b = e.target.closest('[data-range]'); if(b){ prefs.range = b.dataset.range; savePrefs(); renderChart(compute()); } };
+$('refreshBtn').onclick = async () => {
+  try{ data = await backend.load(); LS.set('et.cache', data); renderAll(); toast('Up to date'); }
+  catch(err){ toast("Couldn't refresh. " + err.message); }
+};
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { if(data) renderChart(compute()); });
+document.addEventListener('visibilitychange', () => {
+  // When reopening the app on another day, jump the form to today and pull fresh data.
+  if(document.visibilityState === 'visible' && cfg && data){
+    if(ui.date > today()) ui.date = today();
+    if(cfg.mode !== 'demo') backend.load().then(d => { data = d; LS.set('et.cache', d); renderAll(); }).catch(() => {});
+  }
+});
+
+/* ---------------- Settings ---------------- */
+function openSettings(){
+  $('urlInput').value = cfg?.mode === 'sheet' ? cfg.url : '';
+  $('keyInput').value = cfg?.mode === 'sheet' ? cfg.key : '';
+  $('minHours').value = prefs.minHours;
+  $('connHint').textContent = ''; $('connHint').className = 'hint';
+  $('topicSec').hidden = !cfg;
+  renderTopicList();
+  $('settings').showModal();
+}
+function renderTopicList(){
+  if(!data) return;
+  $('topicList').innerHTML = data.topics.map(t => `
+    <div class="trow"><span class="sw" style="background:${t.color}"></span><span class="n">${esc(t.name)}</span>
+    <button class="icon-btn" data-remove="${esc(t.name)}" aria-label="Remove ${esc(t.name)}"><i class="ph ph-trash"></i></button></div>`).join('');
+}
+$('settingsBtn').onclick = openSettings;
+$('connectBtn').onclick = openSettings;
+$('demoConnect').onclick = openSettings;
+$('closeSettings').onclick = () => $('settings').close();
+$('settings').addEventListener('click', e => { if(e.target === $('settings')) $('settings').close(); });
+
+$('saveConn').onclick = async () => {
+  const url = $('urlInput').value.trim(), key = $('keyInput').value;
+  const hint = $('connHint');
+  if(!/^https:\/\/script\.google(usercontent)?\.com\/.+/.test(url)){ hint.className = 'hint err'; hint.textContent = 'That doesn\'t look like an Apps Script web app URL.'; return; }
+  if(!key){ hint.className = 'hint err'; hint.textContent = 'Enter your passcode.'; return; }
+  hint.className = 'hint'; hint.textContent = 'Checking connection';
+  const prev = cfg; cfg = { mode: 'sheet', url, key };
+  try{
+    data = await backend.load();
+    LS.set('et.cfg', cfg); LS.set('et.cache', data);
+    $('settings').close(); start(); toast('Connected to your Sheet');
+  }catch(err){
+    cfg = prev; hint.className = 'hint err'; hint.textContent = err.message;
+  }
+};
+$('minHours').onchange = e => {
+  const v = Number(e.target.value); if(!(v > 0)) return;
+  prefs.minHours = v; savePrefs(); if(data) renderAll();
+};
+$('addTopic').onclick = async () => {
+  const name = $('newTopic').value.trim(); if(!name) return;
+  const ok = await write('addTopic', { name, color: $('newColor').value }, `Added ${name}`);
+  if(ok) $('newTopic').value = '';
+};
+$('topicList').onclick = async e => {
+  const b = e.target.closest('[data-remove]'); if(!b) return;
+  if(!confirm(`Hide "${b.dataset.remove}" from the app? Past hours stay in your Sheet.`)) return;
+  await write('removeTopic', { name: b.dataset.remove }, 'Topic removed');
+};
+$('useDemo').onclick = () => { cfg = { mode: 'demo' }; LS.set('et.cfg', cfg); $('settings').close(); start(); };
+$('demoBtn').onclick = () => { cfg = { mode: 'demo' }; LS.set('et.cfg', cfg); start(); };
+$('disconnect').onclick = () => {
+  if(!confirm('Disconnect this device? Your Sheet keeps all its data.')) return;
+  LS.del('et.cfg'); LS.del('et.cache'); cfg = null; data = null; $('settings').close(); start();
+};
+
+start();
+</script>
+</body>
+</html>
